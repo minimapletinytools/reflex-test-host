@@ -6,7 +6,7 @@ module Reflex.Test.AppSpec
   )
 where
 
-import           Relude
+import           Prelude
 
 import           Test.Hspec
 import           Test.Hspec.Contrib.HUnit       ( fromHUnitTest )
@@ -15,6 +15,8 @@ import           Test.HUnit
 import           Reflex
 import           Reflex.Test.App
 
+import           Control.Monad                  ( forM_ )
+import           Control.Monad.IO.Class         ( liftIO )
 import qualified Data.List                     as L
 import           Data.These
 
