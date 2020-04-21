@@ -1,7 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Reflex.Test.AppSpec
+module Reflex.Test.HostSpec
   ( spec
   )
 where
@@ -13,7 +13,7 @@ import           Test.Hspec.Contrib.HUnit       ( fromHUnitTest )
 import           Test.HUnit
 
 import           Reflex
-import           Reflex.Test.App
+import           Reflex.Test.Host
 
 import           Control.Monad                  ( forM_ )
 import           Control.Monad.IO.Class         ( liftIO )

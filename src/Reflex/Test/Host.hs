@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module Reflex.Test.App
+module Reflex.Test.Host
   ( AppIn(..)
   , AppOut(..)
   , AppFrame(..)
