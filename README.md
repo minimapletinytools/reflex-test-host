@@ -8,4 +8,4 @@ Note that the following two reflex class constraints are not supported:
 
 - `TriggerEvent` could also be added with some effort but breaks the "pureness" of the test (at least from its inputs) so I don't suggest it. You can at least test parts of your network that don't require `TriggerEvent`
 
-This library is modified from `test/Test/Run.hs` in the reflex main repository. I'll deprecate this module if the functionality is ever moved into an exposed module which I think it should be.
+This library is modified from `test/Test/Run.hs` in the [reflex main repository](https://github.com/reflex-frp/reflex). I'll deprecate this module if the functionality is ever moved into an exposed module which [I think it should be](https://github.com/reflex-frp/reflex/issues/412).
