@@ -19,28 +19,29 @@ import           Control.Monad
 import           Control.Monad.Ref
 import           Data.Dependent.Sum
 import           Data.Functor.Identity
-import           Data.Maybe                     ( fromJust )
+import           Data.Maybe            (fromJust)
 import           Data.These
 
 import           Reflex
 import           Reflex.Host.Class
 
 data AppIn t b e = AppIn
-  { _appIn_behavior :: Behavior t b
-  , _appIn_event    :: Event t e
-  }
+    { _appIn_behavior :: Behavior t b
+    , _appIn_event    :: Event t e
+    }
 
 data AppOut t b e = AppOut
-  { _appOut_behavior :: Behavior t b
-  , _appOut_event    :: Event t e
-  }
+    { _appOut_behavior :: Behavior t b
+    , _appOut_event    :: Event t e
+    }
 
-data AppFrame t bIn eIn bOut eOut m = AppFrame {
-  _appFrame_readPhase :: ReadPhase m (bOut, Maybe eOut)
-  , _appFrame_pulseB :: EventTrigger t bIn
-  , _appFrame_pulseE :: EventTrigger t eIn
-  , _appFrame_fire    :: forall a. [DSum (EventTrigger t) Identity] -> ReadPhase m a -> m [a]
-}
+data AppFrame t bIn eIn bOut eOut m = AppFrame
+    { _appFrame_readPhase :: ReadPhase m (bOut, Maybe eOut)
+    , _appFrame_pulseB :: EventTrigger t bIn
+    , _appFrame_pulseE :: EventTrigger t eIn
+    , _appFrame_fire :: forall a .
+  [DSum (EventTrigger t) Identity] -> ReadPhase m a -> m [a]
+    }
 
 -- | make an 'AppFrame' that takes an input behavior and event and returns an
 -- output behavior and event.
@@ -75,6 +76,11 @@ getAppFrame app b0 = do
 -- Returns behaviors and events from the app's output for each frame that run
 -- for the input (i.e. 'runWithAdjust' and 'performEvent' may cause several
 -- frames to run for each input)
+--
+-- N.B. output behavior will not reflect changes that happen during its frame
+-- i.e. this is analogous to 'tag' and 'tagPromptlyDyn'. If you need the most
+-- recent behavior value you can always call 'tickAppFrame' with 'Nothing' as
+-- input
 tickAppFrame
   :: (t ~ SpiderTimeline Global)
   => AppFrame t bIn eIn bOut eOut m
@@ -94,6 +100,7 @@ tickAppFrame AppFrame {..} input = case input of
   pulseE    = _appFrame_pulseE
 
 -- | calls 'tickAppFrame' for each input in a list and returns collected results
+-- see comments for 'tickAppFrame'
 runApp
   :: (t ~ SpiderTimeline Global, m ~ SpiderHost Global)
   => (AppIn t bIn eIn -> PerformEventT t m (AppOut t bOut eOut))
@@ -107,6 +114,7 @@ runApp app b0 input = runSpiderHost $ do
 -- | run an app with provided list of input events returns list of results for
 -- each input. Each result is a list of events from the app's output for each
 -- frame that run for the input.
+-- see comments for 'tickAppFrame'
 runAppSimple
   :: (t ~ SpiderTimeline Global, m ~ SpiderHost Global)
   => (Event t eIn -> PerformEventT t m (Event t eOut))
@@ -115,6 +123,7 @@ runAppSimple
 runAppSimple app input = runApp' app (map Just input)
 
 -- | same as runAppSimple except input event for each frame is optional
+-- see comments for 'tickAppFrame'
 runApp'
   :: (t ~ SpiderTimeline Global, m ~ SpiderHost Global)
   => (Event t eIn -> PerformEventT t m (Event t eOut))
@@ -125,6 +134,7 @@ runApp' app input = do
   map (map snd) <$> runApp (app' . _appIn_event) () (map (fmap That) input)
 
 -- | same as runApp' except only returns sampled output behavior
+-- see comments for 'tickAppFrame'
 runAppB
   :: (t ~ SpiderTimeline Global, m ~ SpiderHost Global)
   => (Event t eIn -> PerformEventT t m (Behavior t bOut))
