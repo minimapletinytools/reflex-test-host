@@ -1,5 +1,11 @@
 {-# LANGUAGE RecordWildCards #-}
 
+-- |
+-- Module:
+--   Reflex.Test.Host
+-- Description:
+--   This module contains reflex host methods for testing without external events
+
 module Reflex.Test.Host
   ( AppIn(..)
   , AppOut(..)
