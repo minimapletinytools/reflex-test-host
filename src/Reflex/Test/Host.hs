@@ -1,5 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 
+-- TODO rename to SimpleHost
 -- |
 -- Module:
 --   Reflex.Test.Host
