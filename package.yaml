@@ -70,6 +70,8 @@ dependencies:
 - ref-tf
 - dependent-sum
 - these
+- lens
+- transformers
 
 library:
   source-dirs: src
