@@ -1,5 +1,5 @@
+{-# LANGUAGE RankNTypes      #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE RankNTypes #-}
 
 module Reflex.Test.HostSpec
   ( spec
@@ -9,15 +9,15 @@ where
 import           Prelude
 
 import           Test.Hspec
-import           Test.Hspec.Contrib.HUnit       ( fromHUnitTest )
+import           Test.Hspec.Contrib.HUnit (fromHUnitTest)
 import           Test.HUnit
 
 import           Reflex
 import           Reflex.Test.Host
 
-import           Control.Monad                  ( forM_ )
-import           Control.Monad.IO.Class         ( liftIO )
-import qualified Data.List                     as L
+import           Control.Monad            (forM_)
+import           Control.Monad.IO.Class   (liftIO)
+import qualified Data.List                as L
 import           Data.These
 
 
@@ -42,5 +42,5 @@ test_basic = TestLabel "basic" $ TestCase $ runSpiderHost $ do
     liftIO $ L.last out @?= (-b, Just (b + e))
 
 spec :: Spec
-spec = describe "Reflex.Test.App" $ do
+spec = do
   fromHUnitTest test_basic

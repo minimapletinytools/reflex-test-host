@@ -77,6 +77,7 @@ library:
   source-dirs: src
   exposed-modules:
     - Reflex.Test.Host
+    - Reflex.Test.Monad.Host
 
 tests:
   reflex-test-host-test:

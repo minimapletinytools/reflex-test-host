@@ -10,6 +10,11 @@
 
 module Reflex.Test.Monad.Host
   (
+    TestGuestConstraints
+    , MonadReflexTest(..)
+    , AppState(..)
+    , ReflexTestM(..)
+    , runReflexTestM
   )
 where
 
@@ -34,6 +39,8 @@ import           Reflex
 import           Reflex.Host.Class
 import           Reflex.Spider.Internal    (HasSpiderTimeline)
 
+type ReflexHostT t (m :: * -> *)  = TriggerEventT t (PostBuildT t (PerformEventT t m))
+
 type TestGuestConstraints t (m :: * -> *) =
   ( MonadReflexHost t m
   , MonadHold t m
@@ -48,7 +55,9 @@ type TestGuestConstraints t (m :: * -> *) =
   )
 
 
-class MonadReflexTest t inh out m m' where
+-- TODO switch inh and out to type family
+-- TODO rename inh to minh because event triggers will almost certainly be wrapped in a maybe...
+class MonadReflexTest t inh out m m' | m -> m' t inh out where
   inputEventHandles :: m inh -- ^ reads input event handles for use in calls to queueEvent
   queueEventTrigger :: DSum (EventTrigger t) Identity -> m ()
   outputs :: m out
@@ -92,17 +101,28 @@ instance (Monad m') => MonadReflexTest t inh out (ReflexTestM t inh out m') m' w
   fireQueuedEventsAndRead rp = ReflexTestM $ \_ as -> fmap (as,) $ (runFireCommand $ _appState_fire as) (_appState_queuedEvents as) rp
 
 
+instance (MonadSubscribeEvent t m) => MonadSubscribeEvent t (ReflexTestM t inh out m) where
+  subscribeEvent = lift . subscribeEvent
 
---HasSpiderTimeline x => MonadReflexCreateTrigger (SpiderTimeline x) (SpiderHost x)
---newEventWithTriggerRef :: (MonadReflexCreateTrigger t m, MonadRef m, Ref m ~ Ref IO) => m (Event t a, Ref m (Maybe (EventTrigger t a)))
+instance (MonadIO m) => MonadIO (ReflexTestM t inh out m) where
+  liftIO = lift . liftIO
 
-runReflexTestM :: (forall t m. ReflexTestM t inh out m a)
-  -> (inh, inev) -- ^ make sure inh match inputs, i.e. return values of newEventWithTriggerRef
+-- TODO make general version work
+{-runReflexTestM ::
+  (inh, inev) -- ^ make sure inh match inputs, i.e. return values of newEventWithTriggerRef
   -> (forall t m. (TestGuestConstraints t m) => inev -> TriggerEventT t (PostBuildT t (PerformEventT t m)) out)
+  -> (forall t m. ReflexTestM t inh out m a)
   -> IO ()
-runReflexTestM rtm (inputH, input) app = withSpiderTimeline $ runSpiderHostForTimeline $ do
+runReflexTestM (inputH, input) app rtm =  withSpiderTimeline $ runSpiderHostForTimeline $ do
+-}
+
+runReflexTestM ::
+  (inh, inev) -- ^ make sure inh match inputs, i.e. return values of newEventWithTriggerRef
+  -> (inev -> ReflexHostT (SpiderTimeline Global) (SpiderHost Global) out)
+  -> ReflexTestM (SpiderTimeline Global) inh out (SpiderHost Global) a
+  -> IO ()
+runReflexTestM (inputH, input) app rtm = runSpiderHost $ do
   (postBuild, postBuildTriggerRef) <- newEventWithTriggerRef
-  return ()
 
   events <- liftIO newChan
   (output, fc@(FireCommand fire)) <- do
@@ -113,7 +133,7 @@ runReflexTestM rtm (inputH, input) app = withSpiderTimeline $ runSpiderHostForTi
 
   mPostBuildTrigger <- readRef postBuildTriggerRef
   _ <- case mPostBuildTrigger of
-    Nothing               -> error "could not create PostBuild trigger ref"
+    Nothing               -> return [()] -- no subscribers
     Just postBuildTrigger -> fire [postBuildTrigger :=> Identity ()] $ return ()
 
 
@@ -128,11 +148,17 @@ runReflexTestM rtm (inputH, input) app = withSpiderTimeline $ runSpiderHostForTi
 
 
 {-
-class ReflexTestApp inh inev out app t m where
-  testApp :: inev -> TriggerEventT t (PostBuildT t (PerformEventT t m)) out
-  makeInputs :: SpiderHost t (inh, inev)
+class ReflexTestApp app t m where
+  type AppInputHandles app t :: *
+  type AppInputEvents app t :: *
+  type AppOutput app t :: *
+  getApp :: AppInputEvents app t -> TriggerEventT t (PostBuildT t (PerformEventT t m)) (AppOutput app t)
+  makeInputs :: m (AppInputHandles app t, AppInputEvents app t)
 
-
-runReflexTestApp :: (ReflexTestApp inh inev out app t m a) => ()
-runReflexTestApp = undefined
+runReflexTestApp ::
+  (forall t m. (ReflexTestApp app t m) => ReflexTestM t (AppInputHandles app t) (AppOutput app t) m ())
+  -> IO ()
+runReflexTestApp rtm = do
+  i <- makeInputs
+  runReflexTestM rtm i getApp
 -}
