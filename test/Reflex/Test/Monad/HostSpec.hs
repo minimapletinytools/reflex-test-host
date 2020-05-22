@@ -41,13 +41,19 @@ test_basic = TestLabel "basic" $ TestCase $ runSpiderHost $ do
     oh                               <- subscribeEvent =<< outputs
     -- get our input trigger ref, dereference it, queue it and fire it
     intref                           <- inputTriggerRefs
+
+    -- old version which manually dereferences our input trigger
     {-
     mh :: Maybe (EventTrigger T Int) <- liftIO $ readRef intref
     case mh of
       Just h  -> queueEventTrigger $ (h :=> Identity 0)
       Nothing -> error "no subscribers to h"
     -}
+
+    -- simpler version that uses 'queueEventTriggerRef'
     queueEventTriggerRef intref 0
+
+    -- fire the events and read from our output handle
     a <- fireQueuedEventsAndRead $ sequence =<< readEvent oh
 
     -- validate results

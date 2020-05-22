@@ -65,7 +65,8 @@ class MonadReflexTest t m | m -> t  where
   type InputTriggerRefs m :: Type
   -- | in practice, this will likely be a record containing events and behaviors for the monad user to build a 'ReadPhase' that is passed into 'fireQueuedEventsAndRead'
   type OutputEvents m :: Type
-  -- TODO I think you can get rid of this
+  -- | the inner monad that reflex is running in
+  -- likely 'SpiderHost Global'
   type InnerMonad m :: Type -> Type
   -- | see comments for 'InputTriggerRefs'
   inputTriggerRefs :: m (InputTriggerRefs m)
