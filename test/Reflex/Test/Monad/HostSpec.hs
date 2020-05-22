@@ -28,9 +28,7 @@ type T = SpiderTimeline Global
 basic_network
   :: forall t m
    . (t ~ SpiderTimeline Global, m ~ SpiderHost Global)
-  => (  Event t Int
-     -> TriggerEventT t (PostBuildT t (PerformEventT t m)) (Event t Int)
-     )
+  => (Event t Int -> TestGuestT t m (Event t Int))
 basic_network ev = return ev
 
 -- | test 'basic_network'

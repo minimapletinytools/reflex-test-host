@@ -9,7 +9,7 @@
 --   This module contains reflex host methods for testing without external events
 
 module Reflex.Test.Monad.Host
-  ( ReflexHostT
+  ( TestGuestT
   , TestGuestConstraints
   , MonadReflexTest(..)
   , AppState(..)
@@ -35,9 +35,11 @@ import           Data.Kind
 import           Reflex
 import           Reflex.Host.Class
 
-type ReflexHostT t (m :: Type -> Type)
+
+type TestGuestT t (m :: Type -> Type)
   = TriggerEventT t (PostBuildT t (PerformEventT t m))
 
+-- TODO some of these constraints can be dropped probably
 type TestGuestConstraints t (m :: Type -> Type)
   = ( MonadReflexHost t m
     , MonadHold t m
@@ -124,7 +126,7 @@ runReflexTestM
   :: forall mintref inev out t m a
    . (TestGuestConstraints t m)
   => (inev, mintref) -- ^ make sure mintref match inev, i.e. return values of newEventWithTriggerRef
-  -> (inev -> ReflexHostT t m out) -- ^ network to test
+  -> (inev -> TestGuestT t m out) -- ^ network to test
   -> ReflexTestM t mintref out m a -- ^ test monad to run
   -> m ()
 runReflexTestM (input, inputTRefs) app rtm = do
@@ -165,7 +167,7 @@ class ReflexTestApp app t m | app -> t m where
   data AppInputTriggerRefs app :: Type
   data AppInputEvents app :: Type
   data AppOutput app :: Type
-  getApp :: AppInputEvents app -> ReflexHostT t m (AppOutput app)
+  getApp :: AppInputEvents app -> TestGuestT t m (AppOutput app)
   makeInputs :: m (AppInputEvents app, AppInputTriggerRefs app)
 -- TODO to simplify MonadReflexTest interface, maybe we could do something like
 -- subscribeEventsAndReturnTriggers :: m (AppInputTriggers app)

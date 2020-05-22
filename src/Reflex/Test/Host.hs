@@ -9,7 +9,7 @@
 
 module Reflex.Test.Host
   ( TestGuestConstraints
-  , TestGuestMonad
+  , TestGuestT
   , AppIn(..)
   , AppOut(..)
   , AppFrame(..)
@@ -37,6 +37,8 @@ import           Reflex
 import           Reflex.Host.Class
 
 
+type TestGuestT t (m :: Type -> Type) = PostBuildT t (PerformEventT t m)
+
 -- TODO some of these constraints can be dropped probably
 type TestGuestConstraints t (m :: Type -> Type)
   = ( MonadReflexHost t m
@@ -51,8 +53,6 @@ type TestGuestConstraints t (m :: Type -> Type)
     , MonadIO m
     , MonadFix m
     )
-
-type TestGuestMonad t (m :: Type -> Type) = PostBuildT t (PerformEventT t m)
 
 data AppIn t b e = AppIn
     { _appIn_behavior :: Behavior t b
@@ -78,7 +78,7 @@ data AppFrame t bIn eIn bOut eOut m = AppFrame
 getAppFrame
   :: forall t bIn eIn bOut eOut m
    . (TestGuestConstraints t m)
-  => (AppIn t bIn eIn -> TestGuestMonad t m (AppOut t bOut eOut))
+  => (AppIn t bIn eIn -> TestGuestT t m (AppOut t bOut eOut))
   -> bIn
   -> m (AppFrame t bIn eIn bOut eOut m)
 getAppFrame app b0 = do
@@ -157,7 +157,7 @@ tickAppFrame AppFrame {..} input = r where
 -- see comments for 'tickAppFrame'
 runApp
   :: (t ~ SpiderTimeline Global, m ~ SpiderHost Global)
-  => (AppIn t bIn eIn -> TestGuestMonad t m (AppOut t bOut eOut))
+  => (AppIn t bIn eIn -> TestGuestT t m (AppOut t bOut eOut))
   -> bIn
   -> [Maybe (These bIn eIn)]
   -> IO [[(bOut, Maybe eOut)]]
@@ -171,7 +171,7 @@ runApp app b0 input = runSpiderHost $ do
 -- see comments for 'tickAppFrame'
 runAppSimple
   :: (t ~ SpiderTimeline Global, m ~ SpiderHost Global)
-  => (Event t eIn -> TestGuestMonad t m (Event t eOut))
+  => (Event t eIn -> TestGuestT t m (Event t eOut))
   -> [eIn]
   -> IO [[Maybe eOut]]
 runAppSimple app input = runApp' app (map Just input)
@@ -180,7 +180,7 @@ runAppSimple app input = runApp' app (map Just input)
 -- see comments for 'tickAppFrame'
 runApp'
   :: (t ~ SpiderTimeline Global, m ~ SpiderHost Global)
-  => (Event t eIn -> TestGuestMonad t m (Event t eOut))
+  => (Event t eIn -> TestGuestT t m (Event t eOut))
   -> [Maybe eIn]
   -> IO [[Maybe eOut]]
 runApp' app input = do
@@ -191,7 +191,7 @@ runApp' app input = do
 -- see comments for 'tickAppFrame'
 runAppB
   :: (t ~ SpiderTimeline Global, m ~ SpiderHost Global)
-  => (Event t eIn -> TestGuestMonad t m (Behavior t bOut))
+  => (Event t eIn -> TestGuestT t m (Behavior t bOut))
   -> [Maybe eIn]
   -> IO [[bOut]]
 runAppB app input = do

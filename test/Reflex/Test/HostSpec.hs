@@ -9,16 +9,16 @@ where
 import           Prelude
 
 import           Test.Hspec
-import           Test.Hspec.Contrib.HUnit (fromHUnitTest)
+import           Test.Hspec.Contrib.HUnit       ( fromHUnitTest )
 import           Test.HUnit
 
 import           Reflex
 import           Reflex.Test.Host
 
-import           Control.Monad            (forM_)
-import           Control.Monad.IO.Class   (liftIO)
+import           Control.Monad                  ( forM_ )
+import           Control.Monad.IO.Class         ( liftIO )
 import           Data.Functor
-import qualified Data.List                as L
+import qualified Data.List                     as L
 import           Data.These
 
 
@@ -26,7 +26,7 @@ import           Data.These
 postbuild_network
   :: forall t m
    . (t ~ SpiderTimeline Global, m ~ SpiderHost Global)
-  => (AppIn t () () -> TestGuestMonad t m (AppOut t Bool ()))
+  => (AppIn t () () -> TestGuestT t m (AppOut t Bool ()))
 postbuild_network AppIn {..} = do
   pbev            <- getPostBuild
   didPBTriggerBeh <- hold False (pbev $> True)
@@ -45,7 +45,7 @@ test_postbuild = TestLabel "postbuild" $ TestCase $ runSpiderHost $ do
 basic_network
   :: forall t m
    . (t ~ SpiderTimeline Global, m ~ SpiderHost Global)
-  => (AppIn t Int Int -> TestGuestMonad t m (AppOut t Int Int))
+  => (AppIn t Int Int -> TestGuestT t m (AppOut t Int Int))
 basic_network AppIn {..} = return AppOut
   { _appOut_behavior = fmap (* (-1)) _appIn_behavior
   , _appOut_event    = fmap (\(b, e) -> e + b)
