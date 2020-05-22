@@ -9,51 +9,48 @@
 --   This module contains reflex host methods for testing without external events
 
 module Reflex.Test.Monad.Host
-  (
-    TestGuestConstraints
-    , MonadReflexTest(..)
-    , AppState(..)
-    , ReflexTestM(..)
-    , runReflexTestM
+  ( ReflexHostT
+  , TestGuestConstraints
+  , MonadReflexTest(..)
+  , AppState(..)
+  , ReflexTestM(..)
+  , runReflexTestM
   )
 where
 
 import           Prelude
 
 
-import           Control.Concurrent.Chan   (newChan, readChan, writeChan)
+import           Control.Concurrent.Chan
 import           Control.Monad.IO.Class
 
-import qualified Control.Applicative       (liftA2)
-import           Control.Lens              (over, _2)
-import           Control.Monad
+import qualified Control.Applicative            ( liftA2 )
 import           Control.Monad.Fix
 import           Control.Monad.Ref
 import           Control.Monad.Trans.Class
 import           Data.Dependent.Sum
 import           Data.Functor.Identity
-import           Data.Maybe                (fromJust)
-import           Data.These
+import           Data.Kind
 
 import           Reflex
 import           Reflex.Host.Class
-import           Reflex.Spider.Internal    (HasSpiderTimeline)
 
-type ReflexHostT t (m :: * -> *)  = TriggerEventT t (PostBuildT t (PerformEventT t m))
+type ReflexHostT t (m :: Type -> Type)
+  = TriggerEventT t (PostBuildT t (PerformEventT t m))
 
-type TestGuestConstraints t (m :: * -> *) =
-  ( MonadReflexHost t m
-  , MonadHold t m
-  , MonadSample t m
-  , Ref m ~ Ref IO
-  , MonadRef m
-  , MonadRef (HostFrame t)
-  , Ref (HostFrame t) ~ Ref IO
-  , MonadIO (HostFrame t)
+type TestGuestConstraints t (m :: Type -> Type)
+  = ( MonadReflexHost t m
+    , MonadHold t m
+    , MonadSample t m
+    , Ref m ~ Ref IO
+    , MonadRef m
+    , MonadRef (HostFrame t)
+    , Ref (HostFrame t) ~ Ref IO
+    , MonadIO (HostFrame t)
   --, PrimMonad (HostFrame t)
-  , MonadIO m
-  , MonadFix m
-  )
+    , MonadIO m
+    , MonadFix m
+    )
 
 -- |
 class MonadReflexTest t m | m -> t  where
@@ -61,10 +58,10 @@ class MonadReflexTest t m | m -> t  where
   -- therefore it's necessary to pass in IORefs to the EventTriggers, thus the name of this type
   -- in practice, this will likely be a record containing many trigger refs and the monad user must deref them all
   -- TODO is there a better way to do this? Perhaps 'ReflexTestApp' can contain methods to help convert 'InputTriggerRefs m' to various 'EventTrigger t'
-  type InputTriggerRefs m :: *
+  type InputTriggerRefs m :: Type
   -- | in practice, this will likely be a record containing events and behaviors to build a 'ReadPhase' that is passed into 'fireQueuedEventsAndRead'
-  type OutputEvents m :: *
-  type InnerMonad m :: * -> *
+  type OutputEvents m :: Type
+  type InnerMonad m :: Type -> Type
   -- | see comments for 'InputTriggerRefs'
   inputTriggerRefs :: m (InputTriggerRefs m)
   -- | all queued triggers will fire simultaneous on the next execution of 'fireQueuedEventsAndRead'
@@ -86,10 +83,11 @@ data AppState t m = AppState
 newtype ReflexTestM t mintref out m a = ReflexTestM { unReflexTestM :: (mintref, out) -> AppState t m -> m (AppState t m, a) }
 
 instance MonadTrans (ReflexTestM t mintref out) where
-  lift m = ReflexTestM $ \_ as -> fmap (\a -> (as,a)) m
+  lift m = ReflexTestM $ \_ as -> fmap (\a -> (as, a)) m
 
 instance (Functor m) => Functor (ReflexTestM t mintref out m) where
-  fmap f ma = ReflexTestM $ \io as -> fmap (\(as',a) -> (as', f a)) $ unReflexTestM ma io as
+  fmap f ma = ReflexTestM
+    $ \io as -> fmap (\(as', a) -> (as', f a)) $ unReflexTestM ma io as
 
 instance (Applicative m, Monad m) => Applicative (ReflexTestM t mintref out m) where
   pure a = ReflexTestM $ \_ as -> pure (as, a)
@@ -114,32 +112,38 @@ instance (Monad m) => MonadReflexTest t (ReflexTestM t mintref out m) where
   type InputTriggerRefs (ReflexTestM t mintref out m) = mintref
   type OutputEvents (ReflexTestM t mintref out m) = out
   type InnerMonad (ReflexTestM t mintref out m) = m
-  inputTriggerRefs = ReflexTestM $ \(mintref,_) as -> return (as, mintref)
-  queueEventTrigger evt = ReflexTestM $ \_ as -> return (as { _appState_queuedEvents = evt : _appState_queuedEvents as}, ())
-  outputs = ReflexTestM $ \(_,out) as -> return (as, out)
-  fireQueuedEventsAndRead rp = ReflexTestM $ \_ as -> fmap (as,) $ (runFireCommand $ _appState_fire as) (_appState_queuedEvents as) rp
+  inputTriggerRefs = ReflexTestM $ \(mintref, _) as -> return (as, mintref)
+  queueEventTrigger evt = ReflexTestM $ \_ as -> return
+    (as { _appState_queuedEvents = evt : _appState_queuedEvents as }, ())
+  outputs = ReflexTestM $ \(_, out) as -> return (as, out)
+  fireQueuedEventsAndRead rp = ReflexTestM $ \_ as ->
+    fmap (as, )
+      $ (runFireCommand $ _appState_fire as) (_appState_queuedEvents as) rp
 
-runReflexTestM :: forall mintref inev out t m a. (TestGuestConstraints t m)
+runReflexTestM
+  :: forall mintref inev out t m a
+   . (TestGuestConstraints t m)
   => (inev, mintref) -- ^ make sure mintref match inev, i.e. return values of newEventWithTriggerRef
-  -> (inev -> TriggerEventT t (PostBuildT t (PerformEventT t m)) out) -- ^ network to test
+  -> (inev -> ReflexHostT t m out) -- ^ network to test
   -> ReflexTestM t mintref out m a -- ^ test monad to run
   -> m ()
 runReflexTestM (input, inputTRefs) app rtm = do
   (postBuild, postBuildTriggerRef) <- newEventWithTriggerRef
 
-  events <- liftIO newChan
-  (output, fc@(FireCommand fire)) <- do
-    hostPerformEventT $
-      flip runPostBuildT postBuild $
-        flip runTriggerEventT events $
-          app input
+  events                           <- liftIO newChan
+  (output, fc@(FireCommand fire))  <- do
+    hostPerformEventT
+      $ flip runPostBuildT    postBuild
+      $ flip runTriggerEventT events
+      $ app input
 
   -- handle post build
   -- TODO consider adding some way to test 'PostBuild' results
   mPostBuildTrigger <- readRef postBuildTriggerRef
-  _ <- case mPostBuildTrigger of
-    Nothing               -> return [()] -- no subscribers
-    Just postBuildTrigger -> fire [postBuildTrigger :=> Identity ()] $ return ()
+  _                 <- case mPostBuildTrigger of
+    Nothing -> return [()] -- no subscribers
+    Just postBuildTrigger ->
+      fire [postBuildTrigger :=> Identity ()] $ return ()
 
 
   -- TODO maybe find a way to handle trigger events
@@ -158,16 +162,17 @@ runReflexTestM (input, inputTRefs) app rtm = do
 -- | class to help bind network and types to a 'ReflexTestM'
 -- TODO write an example using this
 class ReflexTestApp app t m | app -> t m where
-  data AppInputTriggerRefs app :: *
-  data AppInputEvents app :: *
-  data AppOutput app :: *
-  getApp :: AppInputEvents app -> TriggerEventT t (PostBuildT t (PerformEventT t m)) (AppOutput app)
+  data AppInputTriggerRefs app :: Type
+  data AppInputEvents app :: Type
+  data AppOutput app :: Type
+  getApp :: AppInputEvents app -> ReflexHostT t m (AppOutput app)
   makeInputs :: m (AppInputEvents app, AppInputTriggerRefs app)
 -- TODO to simplify MonadReflexTest interface, maybe we could do something like
 -- subscribeEventsAndReturnTriggers :: m (AppInputTriggers app)
 -- and then change (InputTriggerRefs (ReflexTestM ...)) to just (InputTrigger (ReflexTestM ...))
 
-runReflexTestApp :: (ReflexTestApp app t m, TestGuestConstraints t m)
+runReflexTestApp
+  :: (ReflexTestApp app t m, TestGuestConstraints t m)
   => ReflexTestM t (AppInputTriggerRefs app) (AppOutput app) m ()
   -> m ()
 runReflexTestApp rtm = do
