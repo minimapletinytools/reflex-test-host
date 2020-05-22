@@ -55,8 +55,6 @@ type TestGuestConstraints t (m :: * -> *) =
   , MonadFix m
   )
 
-
--- TODO rename inh to minh because event triggers will almost certainly be wrapped in a maybe...
 class MonadReflexTest t m | m -> t  where
   type InputTriggerRefs m :: *
   type OutputEvents m :: *
@@ -76,15 +74,15 @@ data AppState t m = AppState
     , _appState_fire         :: FireCommand t m -- ^ 'FireCommand' to fire events and run next frame
     }
 
-newtype ReflexTestM t inh out m a = ReflexTestM { unReflexTestM :: (inh, out) -> AppState t m -> m (AppState t m, a) }
+newtype ReflexTestM t mintref out m a = ReflexTestM { unReflexTestM :: (mintref, out) -> AppState t m -> m (AppState t m, a) }
 
-instance MonadTrans (ReflexTestM t inh out) where
+instance MonadTrans (ReflexTestM t mintref out) where
   lift m = ReflexTestM $ \_ as -> fmap (\a -> (as,a)) m
 
-instance (Functor m) => Functor (ReflexTestM t inh out m) where
+instance (Functor m) => Functor (ReflexTestM t mintref out m) where
   fmap f ma = ReflexTestM $ \io as -> fmap (\(as',a) -> (as', f a)) $ unReflexTestM ma io as
 
-instance (Applicative m, Monad m) => Applicative (ReflexTestM t inh out m) where
+instance (Applicative m, Monad m) => Applicative (ReflexTestM t mintref out m) where
   pure a = ReflexTestM $ \_ as -> pure (as, a)
   liftA2 f ma mb = ReflexTestM $ \io as0 -> do
     -- TODO rewrite this using liftA2 and drop the Monad constraint
@@ -92,32 +90,32 @@ instance (Applicative m, Monad m) => Applicative (ReflexTestM t inh out m) where
     (as2, b) <- unReflexTestM mb io as1
     pure (as2, f a b)
 
-instance (Monad m) => Monad (ReflexTestM t inh out m) where
+instance (Monad m) => Monad (ReflexTestM t mintref out m) where
   (>>=) ma f = ReflexTestM $ \io as0 -> do
     (as1, a) <- unReflexTestM ma io as0
     unReflexTestM (f a) io as1
 
-instance (Monad m) => MonadReflexTest t (ReflexTestM t inh out m) where
-  type InputTriggerRefs (ReflexTestM t inh out m) = inh
-  type OutputEvents (ReflexTestM t inh out m) = out
-  type InnerMonad (ReflexTestM t inh out m) = m
-  inputEventHandles = ReflexTestM $ \(inh,_) as -> return (as, inh)
+instance (Monad m) => MonadReflexTest t (ReflexTestM t mintref out m) where
+  type InputTriggerRefs (ReflexTestM t mintref out m) = mintref
+  type OutputEvents (ReflexTestM t mintref out m) = out
+  type InnerMonad (ReflexTestM t mintref out m) = m
+  inputEventHandles = ReflexTestM $ \(mintref,_) as -> return (as, mintref)
   queueEventTrigger evt = ReflexTestM $ \_ as -> return (as { _appState_queuedEvents = evt : _appState_queuedEvents as}, ())
   outputs = ReflexTestM $ \(_,out) as -> return (as, out)
   fireQueuedEventsAndRead rp = ReflexTestM $ \_ as -> fmap (as,) $ (runFireCommand $ _appState_fire as) (_appState_queuedEvents as) rp
 
 
-instance (MonadSubscribeEvent t m) => MonadSubscribeEvent t (ReflexTestM t inh out m) where
+instance (MonadSubscribeEvent t m) => MonadSubscribeEvent t (ReflexTestM t mintref out m) where
   subscribeEvent = lift . subscribeEvent
 
-instance (MonadIO m) => MonadIO (ReflexTestM t inh out m) where
+instance (MonadIO m) => MonadIO (ReflexTestM t mintref out m) where
   liftIO = lift . liftIO
 
-runReflexTestM :: forall inh inev out t m a. (TestGuestConstraints t m)
-  -- TODO rename inh to intref or something
-  => (inev, inh) -- ^ make sure inh match inputs, i.e. return values of newEventWithTriggerRef
+runReflexTestM :: forall mintref inev out t m a. (TestGuestConstraints t m)
+  -- TODO rename mintref to intref or something
+  => (inev, mintref) -- ^ make sure mintref match inputs, i.e. return values of newEventWithTriggerRef
   -> (inev -> TriggerEventT t (PostBuildT t (PerformEventT t m)) out)
-  -> ReflexTestM t inh out m a
+  -> ReflexTestM t mintref out m a
   -> m ()
 runReflexTestM (input, inputH) app rtm = do
   (postBuild, postBuildTriggerRef) <- newEventWithTriggerRef
