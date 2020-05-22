@@ -26,27 +26,30 @@ import           Data.Maybe
 
 type T = SpiderTimeline Global
 
+-- | a very basic test network, simple passes on the input event to its observed outputs
 basic_network
   :: forall t m. (t ~ SpiderTimeline Global, m ~ SpiderHost Global)
   => (Event t Int -> TriggerEventT t (PostBuildT t (PerformEventT t m)) (Event t Int))
 basic_network ev = return ev
 
+-- | test 'basic_network'
 test_basic :: Test
 test_basic = TestLabel "basic" $ TestCase $ runSpiderHost $ do
   ins <- newEventWithTriggerRef
-  let
-    testm = do
-      o <- outputs
-      oh <- subscribeEvent o
-      intref <- inputTriggerRefs
-      mh :: Maybe (EventTrigger T Int) <- liftIO $ readRef intref
-      case mh of
-        Just h  -> queueEventTrigger $ (h :=> Identity 0)
-        Nothing -> error "no subscribers to h"
-      a <- fireQueuedEventsAndRead $ sequence =<< readEvent oh
-      liftIO $ a @?= [Just 0]
+  runReflexTestM ins basic_network $ do
+    -- get our app's output events and subscribe to them
+    oh <- subscribeEvent =<< outputs
 
-  runReflexTestM ins basic_network testm
+    -- get our input trigger ref, dereference it, queue it and fire it
+    intref <- inputTriggerRefs
+    mh :: Maybe (EventTrigger T Int) <- liftIO $ readRef intref
+    case mh of
+      Just h  -> queueEventTrigger $ (h :=> Identity 0)
+      Nothing -> error "no subscribers to h"
+    a <- fireQueuedEventsAndRead $ sequence =<< readEvent oh
+
+    -- validate results
+    liftIO $ a @?= [Just 0]
 
 
 

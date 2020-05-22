@@ -55,25 +55,34 @@ type TestGuestConstraints t (m :: * -> *) =
   , MonadFix m
   )
 
+-- |
 class MonadReflexTest t m | m -> t  where
+  -- | since event subscriptions also happen within the monad, input triggers created via 'newEventWithTriggerRef' may be stuck in the 'Nothing' state as there are no listeners yet
+  -- therefore it's necessary to pass in IORefs to the EventTriggers, thus the name of this type
+  -- in practice, this will likely be a record containing many trigger refs and the monad user must deref them all
+  -- TODO is there a better way to do this? Perhaps 'ReflexTestApp' can contain methods to help convert 'InputTriggerRefs m' to various 'EventTrigger t'
   type InputTriggerRefs m :: *
+  -- | in practice, this will likely be a record containing events and behaviors to build a 'ReadPhase' that is passed into 'fireQueuedEventsAndRead'
   type OutputEvents m :: *
   type InnerMonad m :: * -> *
-  inputTriggerRefs :: m (InputTriggerRefs m) -- ^ reads input event handles for use in calls to queueEvent
+  -- | see comments for 'InputTriggerRefs'
+  inputTriggerRefs :: m (InputTriggerRefs m)
+  -- | all queued triggers will fire simultaneous on the next execution of 'fireQueuedEventsAndRead'
   queueEventTrigger :: DSum (EventTrigger t) Identity -> m ()
+  -- | see comments for 'OutputEvents'
   outputs :: m (OutputEvents m)
+  -- | fire all queued events and run a ReadPhase to produce results from the execution frames
   -- readphase takes place in the inner monad
   fireQueuedEventsAndRead :: ReadPhase (InnerMonad m) a -> m [a]
-  -- TODO consider adding "firePostBuildAndRead" which isn't great because it's a required setup step for the user and makes monads less composable
-  -- another option is to hack it so first call to fireQUeuedEventsAndRead does PostBuild stuff...
 
--- m is inner monad
+-- m is 'InnerMonad' from above
 data AppState t m = AppState
     { _appState_queuedEvents :: [DSum (EventTrigger t) Identity] -- ^ events to fire in next 'FireCommand'
     -- ^ 'FireCommand' to fire events and run next frame
     , _appState_fire         :: FireCommand t m -- ^ 'FireCommand' to fire events and run next frame
     }
 
+-- | implementation of 'MonadReflexTest'
 newtype ReflexTestM t mintref out m a = ReflexTestM { unReflexTestM :: (mintref, out) -> AppState t m -> m (AppState t m, a) }
 
 instance MonadTrans (ReflexTestM t mintref out) where
@@ -95,6 +104,12 @@ instance (Monad m) => Monad (ReflexTestM t mintref out m) where
     (as1, a) <- unReflexTestM ma io as0
     unReflexTestM (f a) io as1
 
+instance (MonadSubscribeEvent t m) => MonadSubscribeEvent t (ReflexTestM t mintref out m) where
+  subscribeEvent = lift . subscribeEvent
+
+instance (MonadIO m) => MonadIO (ReflexTestM t mintref out m) where
+  liftIO = lift . liftIO
+
 instance (Monad m) => MonadReflexTest t (ReflexTestM t mintref out m) where
   type InputTriggerRefs (ReflexTestM t mintref out m) = mintref
   type OutputEvents (ReflexTestM t mintref out m) = out
@@ -104,20 +119,12 @@ instance (Monad m) => MonadReflexTest t (ReflexTestM t mintref out m) where
   outputs = ReflexTestM $ \(_,out) as -> return (as, out)
   fireQueuedEventsAndRead rp = ReflexTestM $ \_ as -> fmap (as,) $ (runFireCommand $ _appState_fire as) (_appState_queuedEvents as) rp
 
-
-instance (MonadSubscribeEvent t m) => MonadSubscribeEvent t (ReflexTestM t mintref out m) where
-  subscribeEvent = lift . subscribeEvent
-
-instance (MonadIO m) => MonadIO (ReflexTestM t mintref out m) where
-  liftIO = lift . liftIO
-
 runReflexTestM :: forall mintref inev out t m a. (TestGuestConstraints t m)
-  -- TODO rename mintref to intref or something
-  => (inev, mintref) -- ^ make sure mintref match inputs, i.e. return values of newEventWithTriggerRef
-  -> (inev -> TriggerEventT t (PostBuildT t (PerformEventT t m)) out)
-  -> ReflexTestM t mintref out m a
+  => (inev, mintref) -- ^ make sure mintref match inev, i.e. return values of newEventWithTriggerRef
+  -> (inev -> TriggerEventT t (PostBuildT t (PerformEventT t m)) out) -- ^ network to test
+  -> ReflexTestM t mintref out m a -- ^ test monad to run
   -> m ()
-runReflexTestM (input, inputH) app rtm = do
+runReflexTestM (input, inputTRefs) app rtm = do
   (postBuild, postBuildTriggerRef) <- newEventWithTriggerRef
 
   events <- liftIO newChan
@@ -127,24 +134,28 @@ runReflexTestM (input, inputH) app rtm = do
         flip runTriggerEventT events $
           app input
 
+  -- handle post build
+  -- TODO consider adding some way to test 'PostBuild' results
   mPostBuildTrigger <- readRef postBuildTriggerRef
   _ <- case mPostBuildTrigger of
     Nothing               -> return [()] -- no subscribers
     Just postBuildTrigger -> fire [postBuildTrigger :=> Identity ()] $ return ()
 
 
-  -- TODO figure out how to do this
+  -- TODO maybe find a way to handle trigger events
   -- one solution is to implement non-blocking variant of TriggerEventT
   -- and then pass as part of AppState such that each call to readPhase will fire any trigger events
   -- another option is just to start a thread and output warnings anytime triggerEvs are created
   --triggerEvs <- liftIO $ readChan events
 
-  unReflexTestM rtm (inputH, output) (AppState [] fc)
+  -- run the test monad
+  unReflexTestM rtm (inputTRefs, output) (AppState [] fc)
+
   return ()
 
 
 
-
+-- | class to help bind network and types to a 'ReflexTestM'
 -- TODO write an example using this
 class ReflexTestApp app t m | app -> t m where
   data AppInputTriggerRefs app :: *
@@ -152,6 +163,9 @@ class ReflexTestApp app t m | app -> t m where
   data AppOutput app :: *
   getApp :: AppInputEvents app -> TriggerEventT t (PostBuildT t (PerformEventT t m)) (AppOutput app)
   makeInputs :: m (AppInputEvents app, AppInputTriggerRefs app)
+-- TODO to simplify MonadReflexTest interface, maybe we could do something like
+-- subscribeEventsAndReturnTriggers :: m (AppInputTriggers app)
+-- and then change (InputTriggerRefs (ReflexTestM ...)) to just (InputTrigger (ReflexTestM ...))
 
 runReflexTestApp :: (ReflexTestApp app t m, TestGuestConstraints t m)
   => ReflexTestM t (AppInputTriggerRefs app) (AppOutput app) m ()
