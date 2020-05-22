@@ -1,5 +1,4 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE RecordWildCards     #-}
 
 -- TODO rename to SimpleHost
 -- |
@@ -11,10 +10,14 @@
 module Reflex.Test.Monad.Host
   ( TestGuestT
   , TestGuestConstraints
+  , ReflexTriggerRef
+
   , MonadReflexTest(..)
   , AppState(..)
   , ReflexTestT(..)
   , runReflexTestM
+  , ReflexTestApp(..)
+  , runReflexTestApp
   )
 where
 
@@ -27,10 +30,7 @@ import           Control.Monad.IO.Class
 import Control.Monad.Reader
 import Control.Monad.State
 
-import qualified Control.Applicative       (liftA2)
-import           Control.Monad.Fix
 import           Control.Monad.Ref
-import           Control.Monad.Trans.Class
 import           Data.Dependent.Sum
 import           Data.Functor.Identity
 import           Data.Kind
@@ -56,6 +56,9 @@ type TestGuestConstraints t (m :: Type -> Type)
     , MonadIO m
     , MonadFix m
     )
+
+-- | since we work with this type directly a lot, it helps to wrap it around a type synonym
+type ReflexTriggerRef t (m :: Type -> Type) a = Ref m (Maybe (EventTrigger t a))
 
 -- |
 class MonadReflexTest t m | m -> t  where
@@ -166,16 +169,13 @@ runReflexTestM (input, inputTRefs) app rtm = do
 
 
 -- | class to help bind network and types to a 'ReflexTestT'
--- TODO write an example using this
+-- see test/Reflex/Test/Monad/HostSpec.hs for usage example
 class ReflexTestApp app t m | app -> t m where
   data AppInputTriggerRefs app :: Type
   data AppInputEvents app :: Type
   data AppOutput app :: Type
   getApp :: AppInputEvents app -> TestGuestT t m (AppOutput app)
   makeInputs :: m (AppInputEvents app, AppInputTriggerRefs app)
--- TODO to simplify MonadReflexTest interface, maybe we could do something like
--- subscribeEventsAndReturnTriggers :: m (AppInputTriggers app)
--- and then change (InputTriggerRefs (ReflexTestT ...)) to just (InputTrigger (ReflexTestT ...))
 
 runReflexTestApp
   :: (ReflexTestApp app t m, TestGuestConstraints t m)
