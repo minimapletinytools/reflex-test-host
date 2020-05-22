@@ -1,6 +1,6 @@
 # reflex-test-app
 
-This library contains functionality for writing unit tests for the "model" portion of your reflex-frp apps. Please see `test/Reflex/Test/App.hs` for basic usage example.
+This library contains functionality for writing unit tests for the "model" portion of your reflex-frp apps. Please see `test/Reflex/Test/App.hs` for basic usage example. You can find more usage examples in [this project](https://github.com/pdlla/reflex-potatoes?files=1) and [this one](https://github.com/pdlla/reflex-todo-undo-mvc-model).
 
 Note that the following two reflex class constraints are not supported:
 

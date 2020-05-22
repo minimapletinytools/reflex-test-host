@@ -1,5 +1,5 @@
+{-# LANGUAGE RankNTypes      #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE RankNTypes #-}
 
 module Reflex.Test.HostSpec
   ( spec
@@ -9,18 +9,19 @@ where
 import           Prelude
 
 import           Test.Hspec
-import           Test.Hspec.Contrib.HUnit       ( fromHUnitTest )
+import           Test.Hspec.Contrib.HUnit (fromHUnitTest)
 import           Test.HUnit
 
 import           Reflex
 import           Reflex.Test.Host
 
-import           Control.Monad                  ( forM_ )
-import           Control.Monad.IO.Class         ( liftIO )
-import qualified Data.List                     as L
+import           Control.Monad            (forM_)
+import           Control.Monad.IO.Class   (liftIO)
+import qualified Data.List                as L
 import           Data.These
 
 
+-- TODO add a more complicated test in here
 
 basic_network
   :: forall t m

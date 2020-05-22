@@ -22,14 +22,32 @@ where
 import           Prelude
 
 import           Control.Monad
+import           Control.Monad.Fix
+import           Control.Monad.IO.Class
 import           Control.Monad.Ref
 import           Data.Dependent.Sum
 import           Data.Functor.Identity
-import           Data.Maybe            (fromJust)
+import           Data.Maybe             (fromJust)
 import           Data.These
 
 import           Reflex
 import           Reflex.Host.Class
+
+
+-- TODO some of these constraints can be dropped probably
+type TestGuestConstraints t (m :: * -> *) =
+  ( MonadReflexHost t m
+  , MonadHold t m
+  , MonadSample t m
+  , Ref m ~ Ref IO
+  , MonadRef m
+  , MonadRef (HostFrame t)
+  , Ref (HostFrame t) ~ Ref IO
+  , MonadIO (HostFrame t)
+  --, PrimMonad (HostFrame t)
+  , MonadIO m
+  , MonadFix m
+  )
 
 data AppIn t b e = AppIn
     { _appIn_behavior :: Behavior t b
@@ -52,8 +70,7 @@ data AppFrame t bIn eIn bOut eOut m = AppFrame
 -- | make an 'AppFrame' that takes an input behavior and event and returns an
 -- output behavior and event.
 getAppFrame
-  :: forall t bIn eIn bOut eOut m
-   . (t ~ SpiderTimeline Global, m ~ SpiderHost Global)
+  :: forall t bIn eIn bOut eOut m. (TestGuestConstraints t m)
   => (AppIn t bIn eIn -> PerformEventT t m (AppOut t bOut eOut))
   -> bIn
   -> m (AppFrame t bIn eIn bOut eOut m)
@@ -87,9 +104,8 @@ getAppFrame app b0 = do
 -- i.e. this is analogous to 'tag' and 'tagPromptlyDyn'. If you need the most
 -- recent behavior value you can always call 'tickAppFrame' with 'Nothing' as
 -- input
-tickAppFrame
-  :: (t ~ SpiderTimeline Global)
-  => AppFrame t bIn eIn bOut eOut m
+tickAppFrame ::
+  AppFrame t bIn eIn bOut eOut m
   -> Maybe (These bIn eIn)
   -> m [(bOut, Maybe eOut)]
 tickAppFrame AppFrame {..} input = case input of
