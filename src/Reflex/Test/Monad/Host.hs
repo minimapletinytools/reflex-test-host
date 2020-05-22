@@ -56,14 +56,16 @@ type TestGuestConstraints t (m :: * -> *) =
   )
 
 
--- TODO switch inh and out to type family
 -- TODO rename inh to minh because event triggers will almost certainly be wrapped in a maybe...
-class MonadReflexTest t inh out m m' | m -> m' t inh out where
-  inputEventHandles :: m inh -- ^ reads input event handles for use in calls to queueEvent
+class MonadReflexTest t m | m -> t  where
+  type InputTriggerRefs m :: *
+  type OutputEvents m :: *
+  type InnerMonad m :: * -> *
+  inputEventHandles :: m (InputTriggerRefs m) -- ^ reads input event handles for use in calls to queueEvent
   queueEventTrigger :: DSum (EventTrigger t) Identity -> m ()
-  outputs :: m out
+  outputs :: m (OutputEvents m)
   -- readphase takes place in the inner monad
-  fireQueuedEventsAndRead :: ReadPhase m' a -> m [a]
+  fireQueuedEventsAndRead :: ReadPhase (InnerMonad m) a -> m [a]
   -- TODO consider adding "firePostBuildAndRead" which isn't great because it's a required setup step for the user and makes monads less composable
   -- another option is to hack it so first call to fireQUeuedEventsAndRead does PostBuild stuff...
 
@@ -95,7 +97,10 @@ instance (Monad m) => Monad (ReflexTestM t inh out m) where
     (as1, a) <- unReflexTestM ma io as0
     unReflexTestM (f a) io as1
 
-instance (Monad m') => MonadReflexTest t inh out (ReflexTestM t inh out m') m' where
+instance (Monad m) => MonadReflexTest t (ReflexTestM t inh out m) where
+  type InputTriggerRefs (ReflexTestM t inh out m) = inh
+  type OutputEvents (ReflexTestM t inh out m) = out
+  type InnerMonad (ReflexTestM t inh out m) = m
   inputEventHandles = ReflexTestM $ \(inh,_) as -> return (as, inh)
   queueEventTrigger evt = ReflexTestM $ \_ as -> return (as { _appState_queuedEvents = evt : _appState_queuedEvents as}, ())
   outputs = ReflexTestM $ \(_,out) as -> return (as, out)
