@@ -7,8 +7,7 @@
 --   This module contains reflex host methods for testing without external events
 
 module Reflex.Test.Host
-  (
-  TestGuestConstraints
+  ( TestGuestConstraints
   , TestGuestMonad
   , AppIn(..)
   , AppOut(..)
@@ -31,7 +30,6 @@ import           Control.Monad.Ref
 import           Data.Dependent.Sum
 import           Data.Functor.Identity
 import           Data.Kind
-import           Data.Maybe             (fromJust)
 import           Data.These
 
 import           Reflex
@@ -39,19 +37,19 @@ import           Reflex.Host.Class
 
 
 -- TODO some of these constraints can be dropped probably
-type TestGuestConstraints t (m :: Type -> Type) =
-  ( MonadReflexHost t m
-  , MonadHold t m
-  , MonadSample t m
-  , Ref m ~ Ref IO
-  , MonadRef m
-  , MonadRef (HostFrame t)
-  , Ref (HostFrame t) ~ Ref IO
-  , MonadIO (HostFrame t)
+type TestGuestConstraints t (m :: Type -> Type)
+  = ( MonadReflexHost t m
+    , MonadHold t m
+    , MonadSample t m
+    , Ref m ~ Ref IO
+    , MonadRef m
+    , MonadRef (HostFrame t)
+    , Ref (HostFrame t) ~ Ref IO
+    , MonadIO (HostFrame t)
   --, PrimMonad (HostFrame t)
-  , MonadIO m
-  , MonadFix m
-  )
+    , MonadIO m
+    , MonadFix m
+    )
 
 type TestGuestMonad t (m :: Type -> Type) = PostBuildT t (PerformEventT t m)
 
@@ -67,8 +65,8 @@ data AppOut t b e = AppOut
 
 data AppFrame t bIn eIn bOut eOut m = AppFrame
     { _appFrame_readPhase :: ReadPhase m (bOut, Maybe eOut)
-    , _appFrame_pulseB :: EventTrigger t bIn
-    , _appFrame_pulseE :: EventTrigger t eIn
+    , _appFrame_mpulseB :: Maybe (EventTrigger t bIn)
+    , _appFrame_mpulseE :: Maybe (EventTrigger t eIn)
     , _appFrame_fire :: forall a .
   [DSum (EventTrigger t) Identity] -> ReadPhase m a -> m [a]
     }
@@ -77,7 +75,8 @@ data AppFrame t bIn eIn bOut eOut m = AppFrame
 -- output behavior and event. This will also fire the 'PostBuild' event if there
 -- are any subscribers.
 getAppFrame
-  :: forall t bIn eIn bOut eOut m. (TestGuestConstraints t m)
+  :: forall t bIn eIn bOut eOut m
+   . (TestGuestConstraints t m)
   => (AppIn t bIn eIn -> TestGuestMonad t m (AppOut t bOut eOut))
   -> bIn
   -> m (AppFrame t bIn eIn bOut eOut m)
@@ -85,7 +84,7 @@ getAppFrame app b0 = do
 
   -- Create the "post-build" event and associated trigger. This event fires
   -- once, when the application starts.
-  (postBuild, postBuildTriggerRef) <- newEventWithTriggerRef
+  (postBuild , postBuildTriggerRef ) <- newEventWithTriggerRef
 
 
   -- Create input behavior, events, and  assosciated triggers.
@@ -95,11 +94,10 @@ getAppFrame app b0 = do
 
   -- Setup the app and obtain its output events and 'FireCommand'
   (out :: AppOut t bOut eOut, FireCommand fire) <-
-    hostPerformEventT $
-      flip runPostBuildT postBuild $
-        app $ AppIn { _appIn_event    = appInE
-                    , _appIn_behavior = appInB
-                    }
+    hostPerformEventT $ flip runPostBuildT postBuild $ app $ AppIn
+      { _appIn_event    = appInE
+      , _appIn_behavior = appInB
+      }
 
 
   -- Read the trigger reference for the post-build event. This will be
@@ -107,8 +105,8 @@ getAppFrame app b0 = do
   mPostBuildTrigger <- readRef postBuildTriggerRef
 
   -- When there is a subscriber to the post-build event, fire the event.
-  forM_ mPostBuildTrigger $ \postBuildTrigger ->
-    fire [postBuildTrigger :=> Identity ()] $ return ()
+  forM_ mPostBuildTrigger
+    $ \postBuildTrigger -> fire [postBuildTrigger :=> Identity ()] $ return ()
 
   --
   hnd :: EventHandle t eOut <- subscribeEvent (_appOut_event out)
@@ -119,8 +117,8 @@ getAppFrame app b0 = do
         frames <- sequence =<< readEvent hnd
         return (b, frames)
   return AppFrame { _appFrame_readPhase = readPhase
-                  , _appFrame_pulseB    = fromJust mpulseB
-                  , _appFrame_pulseE    = fromJust mpulseE
+                  , _appFrame_mpulseB   = mpulseB
+                  , _appFrame_mpulseE   = mpulseE
                   , _appFrame_fire      = fire
                   }
 
@@ -133,22 +131,26 @@ getAppFrame app b0 = do
 -- i.e. this is analogous to 'tag' and 'tagPromptlyDyn'. If you need the most
 -- recent behavior value you can always call 'tickAppFrame' with 'Nothing' as
 -- input
-tickAppFrame ::
-  AppFrame t bIn eIn bOut eOut m
+tickAppFrame
+  :: AppFrame t bIn eIn bOut eOut m
   -> Maybe (These bIn eIn)
   -> m [(bOut, Maybe eOut)]
-tickAppFrame AppFrame {..} input = case input of
-  Nothing -> fire [] $ readPhase
-  Just i  -> case i of
-    This b' -> fire [pulseB :=> Identity b'] $ readPhase
-    That e' -> fire [pulseE :=> Identity e'] $ readPhase
-    These b' e' ->
-      fire [pulseB :=> Identity b', pulseE :=> Identity e'] $ readPhase
- where
+tickAppFrame AppFrame {..} input = r where
   fire      = _appFrame_fire
   readPhase = _appFrame_readPhase
-  pulseB    = _appFrame_pulseB
-  pulseE    = _appFrame_pulseE
+  mpulseB   = _appFrame_mpulseB
+  mpulseE   = _appFrame_mpulseE
+  makeFiring mpulse v = case mpulse of
+    Just pulse -> [pulse :=> Identity v]
+    Nothing    -> []
+  firings = case input of
+    Nothing -> []
+    Just i  -> case i of
+      This b'     -> makeFiring mpulseB b'
+      That e'     -> makeFiring mpulseE e'
+      These b' e' -> makeFiring mpulseB b' <> makeFiring mpulseE e'
+  r = fire firings readPhase
+
 
 -- | calls 'tickAppFrame' for each input in a list and returns collected results
 -- see comments for 'tickAppFrame'
