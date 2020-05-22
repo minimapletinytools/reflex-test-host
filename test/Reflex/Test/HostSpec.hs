@@ -22,11 +22,12 @@ import           Data.These
 
 
 -- TODO add a more complicated test in here
+-- TODO be sure to test PostBuildT stuff
 
 basic_network
   :: forall t m
    . (t ~ SpiderTimeline Global, m ~ SpiderHost Global)
-  => (AppIn t Int Int -> PerformEventT t m (AppOut t Int Int))
+  => (AppIn t Int Int -> TestGuestMonad t m (AppOut t Int Int))
 basic_network AppIn {..} = return AppOut
   { _appOut_behavior = fmap (* (-1)) _appIn_behavior
   , _appOut_event    = fmap (\(b, e) -> e + b)

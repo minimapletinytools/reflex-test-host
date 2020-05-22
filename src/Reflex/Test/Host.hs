@@ -7,7 +7,10 @@
 --   This module contains reflex host methods for testing without external events
 
 module Reflex.Test.Host
-  ( AppIn(..)
+  (
+  TestGuestConstraints
+  , TestGuestMonad(..)
+  , AppIn(..)
   , AppOut(..)
   , AppFrame(..)
   , getAppFrame
@@ -49,6 +52,8 @@ type TestGuestConstraints t (m :: * -> *) =
   , MonadFix m
   )
 
+type TestGuestMonad t (m :: * -> *) = PostBuildT t (PerformEventT t m)
+
 data AppIn t b e = AppIn
     { _appIn_behavior :: Behavior t b
     , _appIn_event    :: Event t e
@@ -68,20 +73,43 @@ data AppFrame t bIn eIn bOut eOut m = AppFrame
     }
 
 -- | make an 'AppFrame' that takes an input behavior and event and returns an
--- output behavior and event.
+-- output behavior and event. This will also fire the 'PostBuild' event if there
+-- are any subscribers.
 getAppFrame
   :: forall t bIn eIn bOut eOut m. (TestGuestConstraints t m)
-  => (AppIn t bIn eIn -> PerformEventT t m (AppOut t bOut eOut))
+  => (AppIn t bIn eIn -> TestGuestMonad t m (AppOut t bOut eOut))
   -> bIn
   -> m (AppFrame t bIn eIn bOut eOut m)
 getAppFrame app b0 = do
+
+  -- Create the "post-build" event and associated trigger. This event fires
+  -- once, when the application starts.
+  (postBuild, postBuildTriggerRef) <- newEventWithTriggerRef
+
+
+  -- Create input behavior, events, and  assosciated triggers.
   (appInHoldE, pulseHoldTriggerRef ) <- newEventWithTriggerRef
   (appInE    , pulseEventTriggerRef) <- newEventWithTriggerRef
   appInB                             <- hold b0 appInHoldE
+
+  -- Setup the app and obtain its output events and 'FireCommand'
   (out :: AppOut t bOut eOut, FireCommand fire) <-
-    hostPerformEventT $ app $ AppIn { _appIn_event    = appInE
-                                    , _appIn_behavior = appInB
-                                    }
+    hostPerformEventT $
+      flip runPostBuildT postBuild $
+        app $ AppIn { _appIn_event    = appInE
+                    , _appIn_behavior = appInB
+                    }
+
+
+  -- Read the trigger reference for the post-build event. This will be
+  -- 'Nothing' if the guest application hasn't subscribed to this event.
+  mPostBuildTrigger <- readRef postBuildTriggerRef
+
+  -- When there is a subscriber to the post-build event, fire the event.
+  forM_ mPostBuildTrigger $ \postBuildTrigger ->
+    fire [postBuildTrigger :=> Identity ()] $ return ()
+
+  --
   hnd :: EventHandle t eOut <- subscribeEvent (_appOut_event out)
   mpulseB                   <- readRef pulseHoldTriggerRef
   mpulseE                   <- readRef pulseEventTriggerRef
@@ -125,7 +153,7 @@ tickAppFrame AppFrame {..} input = case input of
 -- see comments for 'tickAppFrame'
 runApp
   :: (t ~ SpiderTimeline Global, m ~ SpiderHost Global)
-  => (AppIn t bIn eIn -> PerformEventT t m (AppOut t bOut eOut))
+  => (AppIn t bIn eIn -> TestGuestMonad t m (AppOut t bOut eOut))
   -> bIn
   -> [Maybe (These bIn eIn)]
   -> IO [[(bOut, Maybe eOut)]]
@@ -139,7 +167,7 @@ runApp app b0 input = runSpiderHost $ do
 -- see comments for 'tickAppFrame'
 runAppSimple
   :: (t ~ SpiderTimeline Global, m ~ SpiderHost Global)
-  => (Event t eIn -> PerformEventT t m (Event t eOut))
+  => (Event t eIn -> TestGuestMonad t m (Event t eOut))
   -> [eIn]
   -> IO [[Maybe eOut]]
 runAppSimple app input = runApp' app (map Just input)
@@ -148,7 +176,7 @@ runAppSimple app input = runApp' app (map Just input)
 -- see comments for 'tickAppFrame'
 runApp'
   :: (t ~ SpiderTimeline Global, m ~ SpiderHost Global)
-  => (Event t eIn -> PerformEventT t m (Event t eOut))
+  => (Event t eIn -> TestGuestMonad t m (Event t eOut))
   -> [Maybe eIn]
   -> IO [[Maybe eOut]]
 runApp' app input = do
@@ -159,7 +187,7 @@ runApp' app input = do
 -- see comments for 'tickAppFrame'
 runAppB
   :: (t ~ SpiderTimeline Global, m ~ SpiderHost Global)
-  => (Event t eIn -> PerformEventT t m (Behavior t bOut))
+  => (Event t eIn -> TestGuestMonad t m (Behavior t bOut))
   -> [Maybe eIn]
   -> IO [[bOut]]
 runAppB app input = do
