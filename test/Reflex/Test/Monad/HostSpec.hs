@@ -9,10 +9,10 @@ where
 import           Prelude
 
 import           Test.Hspec
-import           Test.Hspec.Contrib.HUnit       ( fromHUnitTest )
+import           Test.Hspec.Contrib.HUnit (fromHUnitTest)
 import           Test.HUnit
 
-import           Control.Monad.IO.Class         ( liftIO )
+import           Control.Monad.IO.Class   (liftIO)
 import           Control.Monad.Ref
 import           Data.Dependent.Sum
 import           Data.Functor.Identity
@@ -36,15 +36,18 @@ test_basic :: Test
 test_basic = TestLabel "basic" $ TestCase $ runSpiderHost $ do
   ins <- newEventWithTriggerRef
   runReflexTestM ins basic_network $ do
+
     -- get our app's output events and subscribe to them
     oh                               <- subscribeEvent =<< outputs
-
     -- get our input trigger ref, dereference it, queue it and fire it
     intref                           <- inputTriggerRefs
+    {-
     mh :: Maybe (EventTrigger T Int) <- liftIO $ readRef intref
     case mh of
       Just h  -> queueEventTrigger $ (h :=> Identity 0)
       Nothing -> error "no subscribers to h"
+    -}
+    queueEventTriggerRef intref 0
     a <- fireQueuedEventsAndRead $ sequence =<< readEvent oh
 
     -- validate results

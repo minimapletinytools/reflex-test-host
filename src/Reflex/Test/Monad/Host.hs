@@ -24,7 +24,7 @@ import           Prelude
 import           Control.Concurrent.Chan
 import           Control.Monad.IO.Class
 
-import qualified Control.Applicative            ( liftA2 )
+import qualified Control.Applicative       (liftA2)
 import           Control.Monad.Fix
 import           Control.Monad.Ref
 import           Control.Monad.Trans.Class
@@ -59,15 +59,18 @@ class MonadReflexTest t m | m -> t  where
   -- | since event subscriptions also happen within the monad, input triggers created via 'newEventWithTriggerRef' may be stuck in the 'Nothing' state as there are no listeners yet
   -- therefore it's necessary to pass in IORefs to the EventTriggers, thus the name of this type
   -- in practice, this will likely be a record containing many trigger refs and the monad user must deref them all
-  -- TODO is there a better way to do this? Perhaps 'ReflexTestApp' can contain methods to help convert 'InputTriggerRefs m' to various 'EventTrigger t'
   type InputTriggerRefs m :: Type
-  -- | in practice, this will likely be a record containing events and behaviors to build a 'ReadPhase' that is passed into 'fireQueuedEventsAndRead'
+  -- | in practice, this will likely be a record containing events and behaviors for the monad user to build a 'ReadPhase' that is passed into 'fireQueuedEventsAndRead'
   type OutputEvents m :: Type
+  -- TODO I think you can get rid of this
   type InnerMonad m :: Type -> Type
   -- | see comments for 'InputTriggerRefs'
   inputTriggerRefs :: m (InputTriggerRefs m)
   -- | all queued triggers will fire simultaneous on the next execution of 'fireQueuedEventsAndRead'
   queueEventTrigger :: DSum (EventTrigger t) Identity -> m ()
+  -- | same as 'queueEventTrigger' except works with trigger refs
+  -- if the trigger ref derefs to 'Nothing', the event does not get queued
+  queueEventTriggerRef :: Ref (InnerMonad m) (Maybe (EventTrigger t a)) -> a -> m ()
   -- | see comments for 'OutputEvents'
   outputs :: m (OutputEvents m)
   -- | fire all queued events and run a ReadPhase to produce results from the execution frames
@@ -110,13 +113,19 @@ instance (MonadSubscribeEvent t m) => MonadSubscribeEvent t (ReflexTestM t mintr
 instance (MonadIO m) => MonadIO (ReflexTestM t mintref out m) where
   liftIO = lift . liftIO
 
-instance (Monad m) => MonadReflexTest t (ReflexTestM t mintref out m) where
+instance (Monad m, MonadRef m) => MonadReflexTest t (ReflexTestM t mintref out m) where
   type InputTriggerRefs (ReflexTestM t mintref out m) = mintref
   type OutputEvents (ReflexTestM t mintref out m) = out
   type InnerMonad (ReflexTestM t mintref out m) = m
   inputTriggerRefs = ReflexTestM $ \(mintref, _) as -> return (as, mintref)
   queueEventTrigger evt = ReflexTestM $ \_ as -> return
     (as { _appState_queuedEvents = evt : _appState_queuedEvents as }, ())
+  queueEventTriggerRef ref a = ReflexTestM $ \_ as -> do
+    mpulse <- readRef ref
+    case mpulse of
+      Nothing    -> return (as, ())
+      Just pulse -> return
+        (as { _appState_queuedEvents = (pulse :=> Identity a) : _appState_queuedEvents as }, ())
   outputs = ReflexTestM $ \(_, out) as -> return (as, out)
   fireQueuedEventsAndRead rp = ReflexTestM $ \_ as ->
     fmap (as, )
