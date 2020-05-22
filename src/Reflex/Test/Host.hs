@@ -9,7 +9,7 @@
 module Reflex.Test.Host
   (
   TestGuestConstraints
-  , TestGuestMonad(..)
+  , TestGuestMonad
   , AppIn(..)
   , AppOut(..)
   , AppFrame(..)
@@ -30,6 +30,7 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Ref
 import           Data.Dependent.Sum
 import           Data.Functor.Identity
+import           Data.Kind
 import           Data.Maybe             (fromJust)
 import           Data.These
 
@@ -38,7 +39,7 @@ import           Reflex.Host.Class
 
 
 -- TODO some of these constraints can be dropped probably
-type TestGuestConstraints t (m :: * -> *) =
+type TestGuestConstraints t (m :: Type -> Type) =
   ( MonadReflexHost t m
   , MonadHold t m
   , MonadSample t m
@@ -52,7 +53,7 @@ type TestGuestConstraints t (m :: * -> *) =
   , MonadFix m
   )
 
-type TestGuestMonad t (m :: * -> *) = PostBuildT t (PerformEventT t m)
+type TestGuestMonad t (m :: Type -> Type) = PostBuildT t (PerformEventT t m)
 
 data AppIn t b e = AppIn
     { _appIn_behavior :: Behavior t b
