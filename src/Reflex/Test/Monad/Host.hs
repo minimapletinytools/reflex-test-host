@@ -46,6 +46,7 @@ type TestGuestConstraints t (m :: * -> *) =
   , MonadHold t m
   , MonadSample t m
   , Ref m ~ Ref IO
+  , MonadRef m
   , MonadRef (HostFrame t)
   , Ref (HostFrame t) ~ Ref IO
   , MonadIO (HostFrame t)
@@ -108,20 +109,12 @@ instance (MonadIO m) => MonadIO (ReflexTestM t inh out m) where
   liftIO = lift . liftIO
 
 -- TODO make general version work
-{-runReflexTestM ::
-  (inh, inev) -- ^ make sure inh match inputs, i.e. return values of newEventWithTriggerRef
-  -> (forall t m. (TestGuestConstraints t m) => inev -> TriggerEventT t (PostBuildT t (PerformEventT t m)) out)
-  -> (forall t m. ReflexTestM t inh out m a)
-  -> IO ()
-runReflexTestM (inputH, input) app rtm =  withSpiderTimeline $ runSpiderHostForTimeline $ do
--}
-
-runReflexTestM ::
-  (inh, inev) -- ^ make sure inh match inputs, i.e. return values of newEventWithTriggerRef
-  -> (inev -> ReflexHostT (SpiderTimeline Global) (SpiderHost Global) out)
-  -> ReflexTestM (SpiderTimeline Global) inh out (SpiderHost Global) a
-  -> IO ()
-runReflexTestM (inputH, input) app rtm = runSpiderHost $ do
+runReflexTestM :: forall inh inev out t m a. (TestGuestConstraints t m)
+  => (inh, inev) -- ^ make sure inh match inputs, i.e. return values of newEventWithTriggerRef
+  -> (inev -> TriggerEventT t (PostBuildT t (PerformEventT t m)) out)
+  -> ReflexTestM t inh out m a
+  -> m ()
+runReflexTestM (inputH, input) app rtm = do
   (postBuild, postBuildTriggerRef) <- newEventWithTriggerRef
 
   events <- liftIO newChan

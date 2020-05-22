@@ -47,7 +47,7 @@ test_basic = TestLabel "basic" $ TestCase $ runSpiderHost $ do
       a <- fireQueuedEventsAndRead $ sequence =<< readEvent oh
       liftIO $ a @?= [Just 0]
 
-  liftIO $ runReflexTestM (minh, inev) basic_network testm
+  runReflexTestM (minh, inev) basic_network testm
 
 
 
