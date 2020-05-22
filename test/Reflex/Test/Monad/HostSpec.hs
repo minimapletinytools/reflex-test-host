@@ -33,21 +33,20 @@ basic_network ev = return ev
 
 test_basic :: Test
 test_basic = TestLabel "basic" $ TestCase $ runSpiderHost $ do
-  (inev, intref) <- newEventWithTriggerRef
-  minh <- readRef intref
+  ins <- newEventWithTriggerRef
   let
-    testm :: ReflexTestM T (Maybe (EventTrigger T Int)) (Event T Int) (SpiderHost Global) ()
     testm = do
       o <- outputs
       oh <- subscribeEvent o
-      mh :: Maybe (EventTrigger T Int) <- inputEventHandles
+      intref <- inputEventHandles
+      mh :: Maybe (EventTrigger T Int) <- liftIO $ readRef intref
       case mh of
         Just h  -> queueEventTrigger $ (h :=> Identity 0)
         Nothing -> error "no subscribers to h"
       a <- fireQueuedEventsAndRead $ sequence =<< readEvent oh
       liftIO $ a @?= [Just 0]
 
-  runReflexTestM (minh, inev) basic_network testm
+  runReflexTestM ins basic_network testm
 
 
 

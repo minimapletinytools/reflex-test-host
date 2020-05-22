@@ -108,13 +108,13 @@ instance (MonadSubscribeEvent t m) => MonadSubscribeEvent t (ReflexTestM t inh o
 instance (MonadIO m) => MonadIO (ReflexTestM t inh out m) where
   liftIO = lift . liftIO
 
--- TODO make general version work
 runReflexTestM :: forall inh inev out t m a. (TestGuestConstraints t m)
-  => (inh, inev) -- ^ make sure inh match inputs, i.e. return values of newEventWithTriggerRef
+  -- TODO rename inh to intref or something
+  => (inev, inh) -- ^ make sure inh match inputs, i.e. return values of newEventWithTriggerRef
   -> (inev -> TriggerEventT t (PostBuildT t (PerformEventT t m)) out)
   -> ReflexTestM t inh out m a
   -> m ()
-runReflexTestM (inputH, input) app rtm = do
+runReflexTestM (input, inputH) app rtm = do
   (postBuild, postBuildTriggerRef) <- newEventWithTriggerRef
 
   events <- liftIO newChan
@@ -131,7 +131,7 @@ runReflexTestM (inputH, input) app rtm = do
 
 
   -- TODO figure out how to do this
-  -- correct solution is to implement non-blocking variant of TriggerEventT
+  -- one solution is to implement non-blocking variant of TriggerEventT
   -- and then pass as part of AppState such that each call to readPhase will fire any trigger events
   -- another option is just to start a thread and output warnings anytime triggerEvs are created
   --triggerEvs <- liftIO $ readChan events
