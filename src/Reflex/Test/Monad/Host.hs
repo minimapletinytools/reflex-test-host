@@ -59,7 +59,7 @@ class MonadReflexTest t m | m -> t  where
   type InputTriggerRefs m :: *
   type OutputEvents m :: *
   type InnerMonad m :: * -> *
-  inputEventHandles :: m (InputTriggerRefs m) -- ^ reads input event handles for use in calls to queueEvent
+  inputTriggerRefs :: m (InputTriggerRefs m) -- ^ reads input event handles for use in calls to queueEvent
   queueEventTrigger :: DSum (EventTrigger t) Identity -> m ()
   outputs :: m (OutputEvents m)
   -- readphase takes place in the inner monad
@@ -99,7 +99,7 @@ instance (Monad m) => MonadReflexTest t (ReflexTestM t mintref out m) where
   type InputTriggerRefs (ReflexTestM t mintref out m) = mintref
   type OutputEvents (ReflexTestM t mintref out m) = out
   type InnerMonad (ReflexTestM t mintref out m) = m
-  inputEventHandles = ReflexTestM $ \(mintref,_) as -> return (as, mintref)
+  inputTriggerRefs = ReflexTestM $ \(mintref,_) as -> return (as, mintref)
   queueEventTrigger evt = ReflexTestM $ \_ as -> return (as { _appState_queuedEvents = evt : _appState_queuedEvents as}, ())
   outputs = ReflexTestM $ \(_,out) as -> return (as, out)
   fireQueuedEventsAndRead rp = ReflexTestM $ \_ as -> fmap (as,) $ (runFireCommand $ _appState_fire as) (_appState_queuedEvents as) rp
@@ -143,18 +143,19 @@ runReflexTestM (input, inputH) app rtm = do
   return ()
 
 
-{-
-class ReflexTestApp app t m where
-  type AppInputHandles app t :: *
-  type AppInputEvents app t :: *
-  type AppOutput app t :: *
-  getApp :: AppInputEvents app t -> TriggerEventT t (PostBuildT t (PerformEventT t m)) (AppOutput app t)
-  makeInputs :: m (AppInputHandles app t, AppInputEvents app t)
 
-runReflexTestApp ::
-  (forall t m. (ReflexTestApp app t m) => ReflexTestM t (AppInputHandles app t) (AppOutput app t) m ())
-  -> IO ()
+
+-- TODO write an example using this
+class ReflexTestApp app t m | app -> t m where
+  data AppInputTriggerRefs app :: *
+  data AppInputEvents app :: *
+  data AppOutput app :: *
+  getApp :: AppInputEvents app -> TriggerEventT t (PostBuildT t (PerformEventT t m)) (AppOutput app)
+  makeInputs :: m (AppInputEvents app, AppInputTriggerRefs app)
+
+runReflexTestApp :: (ReflexTestApp app t m, TestGuestConstraints t m)
+  => ReflexTestM t (AppInputTriggerRefs app) (AppOutput app) m ()
+  -> m ()
 runReflexTestApp rtm = do
   i <- makeInputs
-  runReflexTestM rtm i getApp
--}
+  runReflexTestM i getApp rtm

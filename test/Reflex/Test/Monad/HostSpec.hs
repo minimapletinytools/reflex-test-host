@@ -38,7 +38,7 @@ test_basic = TestLabel "basic" $ TestCase $ runSpiderHost $ do
     testm = do
       o <- outputs
       oh <- subscribeEvent o
-      intref <- inputEventHandles
+      intref <- inputTriggerRefs
       mh :: Maybe (EventTrigger T Int) <- liftIO $ readRef intref
       case mh of
         Just h  -> queueEventTrigger $ (h :=> Identity 0)
