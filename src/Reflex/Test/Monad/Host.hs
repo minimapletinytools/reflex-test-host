@@ -1,11 +1,12 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
 
--- TODO rename to SimpleHost
+
+
+
 -- |
 -- Module:
---   Reflex.Test.Host
+--   Reflex.Test.Monad.Host
 -- Description:
---   This module contains reflex host methods for testing without external events
+--   This module contains a monad for testing reflex networks
 
 module Reflex.Test.Monad.Host
   ( TestGuestT
@@ -21,14 +22,16 @@ module Reflex.Test.Monad.Host
   )
 where
 
+
+
 import           Prelude
 
 
 import           Control.Concurrent.Chan
 import           Control.Monad.IO.Class
 
-import Control.Monad.Reader
-import Control.Monad.State
+import           Control.Monad.Reader
+import           Control.Monad.State.Strict
 
 import           Control.Monad.Ref
 import           Data.Dependent.Sum
@@ -36,6 +39,7 @@ import           Data.Functor.Identity
 import           Data.Kind
 
 import           Reflex
+import           Reflex.Class               ()
 import           Reflex.Host.Class
 
 
@@ -93,7 +97,18 @@ data AppState t m = AppState
 
 -- | implementation of 'MonadReflexTest'
 newtype ReflexTestT t mintref out m a = ReflexTestT { unReflexTestM :: ReaderT (mintref, out) (StateT (AppState t m) m) a }
-  deriving (Functor, Applicative, Monad, MonadIO, MonadReader (mintref, out), MonadState (AppState t m))
+  deriving
+    ( Functor
+    , Applicative
+    , Monad
+    , MonadIO
+    , MonadFix
+    , MonadReader (mintref, out)
+    , MonadState (AppState t m))
+
+deriving instance MonadSample t m => MonadSample t (ReflexTestT t mintref out m)
+deriving instance MonadHold t m => MonadHold t (ReflexTestT t mintref out m)
+deriving instance MonadReflexCreateTrigger t m => MonadReflexCreateTrigger t (ReflexTestT t mintref out m)
 
 instance MonadTrans (ReflexTestT t mintref out) where
   lift = ReflexTestT . lift . lift
@@ -109,7 +124,7 @@ instance (Monad m, MonadRef m) => MonadReflexTest t (ReflexTestT t mintref out m
     (mintref,_) <- ask
     return mintref
   queueEventTrigger evt = do
-    as <- get 
+    as <- get
     put $ as { _appState_queuedEvents = evt : _appState_queuedEvents as }
   queueEventTriggerRef ref a = do
     mpulse <- lift $ readRef ref
@@ -119,7 +134,7 @@ instance (Monad m, MonadRef m) => MonadReflexTest t (ReflexTestT t mintref out m
         as <- get
         put $ as { _appState_queuedEvents = (pulse :=> Identity a) : _appState_queuedEvents as }
   outputs = do
-    (_,out) <- ask 
+    (_,out) <- ask
     return out
   fireQueuedEventsAndRead rp = do
     as <- get
@@ -159,10 +174,10 @@ runReflexTestM (input, inputTRefs) app rtm = do
 
   -- run the test monad
   flip runStateT (AppState [] fc)
-    $ flip runReaderT (inputTRefs, output) 
-      $ unReflexTestM rtm 
-    
-   
+    $ flip runReaderT (inputTRefs, output)
+      $ unReflexTestM rtm
+
+
 
   return ()
 
