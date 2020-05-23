@@ -39,7 +39,7 @@ basic_network ev = return ev
 test_basic :: Test
 test_basic = TestLabel "basic" $ TestCase $ runSpiderHost $ do
   ins <- newEventWithTriggerRef
-  runReflexTestM ins basic_network $ do
+  runReflexTestT ins basic_network $ do
 
     -- get our app's output events and subscribe to them
     oh                               <- subscribeEvent =<< outputs

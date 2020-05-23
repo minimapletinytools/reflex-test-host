@@ -16,7 +16,7 @@ module Reflex.Test.Monad.Host
   , MonadReflexTest(..)
   , AppState(..)
   , ReflexTestT(..)
-  , runReflexTestM
+  , runReflexTestT
   , ReflexTestApp(..)
   , runReflexTestApp
   )
@@ -30,10 +30,10 @@ import           Prelude
 import           Control.Concurrent.Chan
 import           Control.Monad.IO.Class
 
+import           Control.Monad.Primitive
 import           Control.Monad.Reader
-import           Control.Monad.State.Strict
-
 import           Control.Monad.Ref
+import           Control.Monad.State.Strict
 import           Data.Dependent.Sum
 import           Data.Functor.Identity
 import           Data.Kind
@@ -46,7 +46,6 @@ import           Reflex.Host.Class
 type TestGuestT t (m :: Type -> Type)
   = TriggerEventT t (PostBuildT t (PerformEventT t m))
 
--- TODO some of these constraints can be dropped probably
 type TestGuestConstraints t (m :: Type -> Type)
   = ( MonadReflexHost t m
     , MonadHold t m
@@ -56,7 +55,7 @@ type TestGuestConstraints t (m :: Type -> Type)
     , MonadRef (HostFrame t)
     , Ref (HostFrame t) ~ Ref IO
     , MonadIO (HostFrame t)
-  --, PrimMonad (HostFrame t)
+    , PrimMonad (HostFrame t)
     , MonadIO m
     , MonadFix m
     )
@@ -96,33 +95,33 @@ data AppState t m = AppState
     }
 
 -- | implementation of 'MonadReflexTest'
-newtype ReflexTestT t mintref out m a = ReflexTestT { unReflexTestM :: ReaderT (mintref, out) (StateT (AppState t m) m) a }
+newtype ReflexTestT t intref out m a = ReflexTestT { unReflexTestM :: ReaderT (intref, out) (StateT (AppState t m) m) a }
   deriving
     ( Functor
     , Applicative
     , Monad
     , MonadIO
     , MonadFix
-    , MonadReader (mintref, out)
+    , MonadReader (intref, out)
     , MonadState (AppState t m))
 
-deriving instance MonadSample t m => MonadSample t (ReflexTestT t mintref out m)
-deriving instance MonadHold t m => MonadHold t (ReflexTestT t mintref out m)
-deriving instance MonadReflexCreateTrigger t m => MonadReflexCreateTrigger t (ReflexTestT t mintref out m)
+deriving instance MonadSample t m => MonadSample t (ReflexTestT t intref out m)
+deriving instance MonadHold t m => MonadHold t (ReflexTestT t intref out m)
+deriving instance MonadReflexCreateTrigger t m => MonadReflexCreateTrigger t (ReflexTestT t intref out m)
 
-instance MonadTrans (ReflexTestT t mintref out) where
+instance MonadTrans (ReflexTestT t intref out) where
   lift = ReflexTestT . lift . lift
 
-instance (MonadSubscribeEvent t m) => MonadSubscribeEvent t (ReflexTestT t mintref out m) where
+instance (MonadSubscribeEvent t m) => MonadSubscribeEvent t (ReflexTestT t intref out m) where
   subscribeEvent = lift . subscribeEvent
 
-instance (Monad m, MonadRef m) => MonadReflexTest t (ReflexTestT t mintref out m) where
-  type InputTriggerRefs (ReflexTestT t mintref out m) = mintref
-  type OutputEvents (ReflexTestT t mintref out m) = out
-  type InnerMonad (ReflexTestT t mintref out m) = m
+instance (Monad m, MonadRef m) => MonadReflexTest t (ReflexTestT t intref out m) where
+  type InputTriggerRefs (ReflexTestT t intref out m) = intref
+  type OutputEvents (ReflexTestT t intref out m) = out
+  type InnerMonad (ReflexTestT t intref out m) = m
   inputTriggerRefs = do
-    (mintref,_) <- ask
-    return mintref
+    (intref,_) <- ask
+    return intref
   queueEventTrigger evt = do
     as <- get
     put $ as { _appState_queuedEvents = evt : _appState_queuedEvents as }
@@ -140,14 +139,14 @@ instance (Monad m, MonadRef m) => MonadReflexTest t (ReflexTestT t mintref out m
     as <- get
     lift $ (runFireCommand $ _appState_fire as) (_appState_queuedEvents as) rp
 
-runReflexTestM
-  :: forall mintref inev out t m a
+runReflexTestT
+  :: forall intref inev out t m a
    . (TestGuestConstraints t m)
-  => (inev, mintref) -- ^ make sure mintref match inev, i.e. return values of newEventWithTriggerRef
+  => (inev, intref) -- ^ make sure intref match inev, i.e. return values of newEventWithTriggerRef
   -> (inev -> TestGuestT t m out) -- ^ network to test
-  -> ReflexTestT t mintref out m a -- ^ test monad to run
+  -> ReflexTestT t intref out m a -- ^ test monad to run
   -> m ()
-runReflexTestM (input, inputTRefs) app rtm = do
+runReflexTestT (input, inputTRefs) app rtm = do
   (postBuild, postBuildTriggerRef) <- newEventWithTriggerRef
 
   events                           <- liftIO newChan
@@ -198,4 +197,4 @@ runReflexTestApp
   -> m ()
 runReflexTestApp rtm = do
   i <- makeInputs
-  runReflexTestM i getApp rtm
+  runReflexTestT i getApp rtm

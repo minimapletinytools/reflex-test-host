@@ -73,6 +73,7 @@ dependencies:
 - lens
 - transformers
 - mtl
+- primitive
 
 library:
   source-dirs: src
