@@ -21,15 +21,6 @@ import           Reflex.Host.Class
 import           Reflex.Test.Monad.Host
 
 
-{-
-class ReflexTestApp app t m | app -> t m where
-  data AppInputTriggerRefs app :: Type
-  data AppInputEvents app :: Type
-  data AppOutput app :: Type
-  getApp :: AppInputEvents app -> TestGuestT t m (AppOutput app)
-  makeInputs :: m (AppInputEvents app, AppInputTriggerRefs app)
--}
-
 -- | a very basic test network, simple passes on the input event to its observed outputs
 basic_network :: forall t m. (ReflexHost t)
   => (Event t Int -> TestGuestT t m (Event t Int))

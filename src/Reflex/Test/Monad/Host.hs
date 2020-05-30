@@ -115,7 +115,7 @@ instance MonadTrans (ReflexTestT t intref out) where
 instance (MonadSubscribeEvent t m) => MonadSubscribeEvent t (ReflexTestT t intref out m) where
   subscribeEvent = lift . subscribeEvent
 
-instance (Monad m, MonadRef m) => MonadReflexTest t (ReflexTestT t intref out m) where
+instance (MonadRef m) => MonadReflexTest t (ReflexTestT t intref out m) where
   type InputTriggerRefs (ReflexTestT t intref out m) = intref
   type OutputEvents (ReflexTestT t intref out m) = out
   type InnerMonad (ReflexTestT t intref out m) = m
@@ -164,7 +164,6 @@ runReflexTestT (input, inputTRefs) app rtm = do
     Just postBuildTrigger ->
       fire [postBuildTrigger :=> Identity ()] $ return ()
 
-
   -- TODO maybe find a way to handle trigger events
   -- one solution is to implement non-blocking variant of TriggerEventT
   -- and then pass as part of AppState such that each call to readPhase will fire any trigger events
@@ -175,8 +174,6 @@ runReflexTestT (input, inputTRefs) app rtm = do
   flip runStateT (AppState [] fc)
     $ flip runReaderT (inputTRefs, output)
       $ unReflexTestM rtm
-
-
 
   return ()
 
