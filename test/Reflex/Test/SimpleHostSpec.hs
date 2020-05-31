@@ -1,7 +1,7 @@
 {-# LANGUAGE RankNTypes      #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module Reflex.Test.HostSpec
+module Reflex.Test.SimpleHostSpec
   ( spec
   )
 where
@@ -9,16 +9,16 @@ where
 import           Prelude
 
 import           Test.Hspec
-import           Test.Hspec.Contrib.HUnit       ( fromHUnitTest )
+import           Test.Hspec.Contrib.HUnit (fromHUnitTest)
 import           Test.HUnit
 
 import           Reflex
-import           Reflex.Test.Host
+import           Reflex.Test.SimpleHost
 
-import           Control.Monad                  ( forM_ )
-import           Control.Monad.IO.Class         ( liftIO )
+import           Control.Monad            (forM_)
+import           Control.Monad.IO.Class   (liftIO)
 import           Data.Functor
-import qualified Data.List                     as L
+import qualified Data.List                as L
 import           Data.These
 
 

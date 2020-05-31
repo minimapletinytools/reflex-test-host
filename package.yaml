@@ -1,5 +1,5 @@
 name:                reflex-test-host
-version:             0.1.1.0
+version:             0.1.2.0
 github:              "pdlla/reflex-test-host"
 license:             BSD3
 author:              "pdlla"
@@ -79,6 +79,7 @@ library:
   source-dirs: src
   exposed-modules:
     - Reflex.Test.Host
+    - Reflex.Test.SimpleHost
     - Reflex.Test.Monad.Host
 
 tests:

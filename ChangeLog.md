@@ -1,5 +1,8 @@
 # Changelog for reflex-test-host
 
+## 0.1.2.0
+- added `Reflex.Test.Monad.Host`
+
 ## 0.1.1.0
 - generalized reflex constraints
 - added `PostBuildT` support
