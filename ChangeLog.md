@@ -1,6 +1,6 @@
 # Changelog for reflex-test-host
 
-## 0.1.2.0
+## 0.1.2.1
 - added `Reflex.Test.Monad.Host`
 
 ## 0.1.1.0
