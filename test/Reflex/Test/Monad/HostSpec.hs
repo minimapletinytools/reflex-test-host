@@ -74,17 +74,22 @@ test_basic_viaReflexTestApp = TestLabel "basic_viaReflexTestApp" $ TestCase $ ru
     -- get our app's output events and subscribe to them
     BasicNetworkTest1_Output {..} <- outputs
     oh                            <- subscribeEvent _basicNetworkTest1_Output_intEv
-    -- get our input trigger ref, dereference it, queue it and fire it
+
+    -- get our input trigger ref
     BasicNetworkTest1_InputTriggerRefs{..}                           <- inputTriggerRefs
 
-    -- simpler version that uses 'queueEventTriggerRef'
+    -- fire it
     queueEventTriggerRef _basicNetworkTest1_InputTriggerRefs_intEvTRef 123
-
     -- fire the events and read from our output handle
     a <- fireQueuedEventsAndRead $ sequence =<< readEvent oh
 
     -- validate results
     liftIO $ a @?= [Just 123]
+
+    -- try a different value
+    queueEventTriggerRef _basicNetworkTest1_InputTriggerRefs_intEvTRef 238
+    a <- fireQueuedEventsAndRead $ sequence =<< readEvent oh
+    liftIO $ a @?= [Just 238]
 
 
 spec :: Spec

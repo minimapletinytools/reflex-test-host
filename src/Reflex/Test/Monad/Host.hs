@@ -137,6 +137,7 @@ instance (MonadRef m) => MonadReflexTest t (ReflexTestT t intref out m) where
     return out
   fireQueuedEventsAndRead rp = do
     as <- get
+    put $ as { _appState_queuedEvents = [] }
     lift $ (runFireCommand $ _appState_fire as) (_appState_queuedEvents as) rp
 
 runReflexTestT
