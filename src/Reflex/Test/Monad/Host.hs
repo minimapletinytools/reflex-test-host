@@ -86,6 +86,9 @@ class MonadReflexTest t m | m -> t  where
   -- | fire all queued events and run a ReadPhase to produce results from the execution frames
   -- readphase takes place in the inner monad
   fireQueuedEventsAndRead :: ReadPhase (InnerMonad m) a -> m [a]
+  -- | same as above with no ReadPhase
+  fireQueuedEvents :: (Monad (ReadPhase (InnerMonad m))) => m [()]
+  fireQueuedEvents = fireQueuedEventsAndRead (return ())
 
 -- m is 'InnerMonad' from above
 data AppState t m = AppState
