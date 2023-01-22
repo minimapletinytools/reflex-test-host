@@ -3,7 +3,8 @@
 
 ## 0.1.2.2
 - add `fireQueuedEvents`
-- switch over to cabal only
+- switch over to cabal instead of stack
+- update dependency to support reflex 0.9
 
 ## 0.1.2.1
 - added `Reflex.Test.Monad.Host`
