@@ -1,5 +1,10 @@
 # Changelog for reflex-test-host
 
+
+## 0.1.2.2
+- add `fireQueuedEvents`
+- switch over to cabal only
+
 ## 0.1.2.1
 - added `Reflex.Test.Monad.Host`
 
