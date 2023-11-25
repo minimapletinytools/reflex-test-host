@@ -1,6 +1,9 @@
 # Changelog for reflex-test-host
 
 
+## 0.1.2.3
+- very minor changes to support latest version of ghc
+
 ## 0.1.2.2
 - add `fireQueuedEvents`
 - switch over to cabal instead of stack

@@ -2,6 +2,7 @@
 {-# LANGUAGE RecordWildCards      #-}
 {-# LANGUAGE UndecidableInstances #-}
 
+
 module Reflex.Test.Monad.HostSpec
   ( spec
   )
@@ -70,7 +71,7 @@ instance (TestGuestConstraints t m) => ReflexTestApp (BasicNetworkTest1 t m) t m
 
 test_basic_viaReflexTestApp :: Test
 test_basic_viaReflexTestApp = TestLabel "basic_viaReflexTestApp" $ TestCase $ runSpiderHost $
-  runReflexTestApp @ (BasicNetworkTest1 (SpiderTimeline Global) (SpiderHost Global)) $ do
+  runReflexTestApp @(BasicNetworkTest1 (SpiderTimeline Global) (SpiderHost Global)) $ do
     -- get our app's output events and subscribe to them
     BasicNetworkTest1_Output {..} <- outputs
     oh                            <- subscribeEvent _basicNetworkTest1_Output_intEv
@@ -81,15 +82,15 @@ test_basic_viaReflexTestApp = TestLabel "basic_viaReflexTestApp" $ TestCase $ ru
     -- fire it
     queueEventTriggerRef _basicNetworkTest1_InputTriggerRefs_intEvTRef 123
     -- fire the events and read from our output handle
-    a <- fireQueuedEventsAndRead $ sequence =<< readEvent oh
+    a1 <- fireQueuedEventsAndRead $ sequence =<< readEvent oh
 
     -- validate results
-    liftIO $ a @?= [Just 123]
+    liftIO $ a1 @?= [Just 123]
 
     -- try a different value
     queueEventTriggerRef _basicNetworkTest1_InputTriggerRefs_intEvTRef 238
-    a <- fireQueuedEventsAndRead $ sequence =<< readEvent oh
-    liftIO $ a @?= [Just 238]
+    a2 <- fireQueuedEventsAndRead $ sequence =<< readEvent oh
+    liftIO $ a2 @?= [Just 238]
 
 
 spec :: Spec

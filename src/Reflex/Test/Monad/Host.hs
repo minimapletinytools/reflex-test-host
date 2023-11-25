@@ -30,6 +30,7 @@ import           Prelude
 import           Control.Concurrent.Chan
 import           Control.Monad.IO.Class
 
+import           Control.Monad.Fix
 import           Control.Monad.Primitive
 import           Control.Monad.Reader
 import           Control.Monad.Ref
